@@ -15,7 +15,7 @@
         }
 
         #map {
-            height: 60vh;
+            height: 60vh; /* Adjust this value to control the map height */
             width: 100%;
         }
 
@@ -70,33 +70,19 @@
 
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.91/Build/Cesium/Cesium.js"></script>
     <script>
+        // Replace 'your_cesium_ion_token' with your actual Cesium ion token
         Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4NWE4MzMxZS0wNTIwLTQ0NmItYTQ2MC0zZGY2NjYzYzFjM2UiLCJpZCI6MjE2MjU3LCJpYXQiOjE3MTYxNDU0OTR9.FfL3OtMl6otEnX0WmWsG8UZdJTqVI0RaOmM7HcBu_so';
 
         var viewer = new Cesium.Viewer('map', {
             terrainProvider: Cesium.createWorldTerrain()
         });
 
+        // Set initial view to show the entire globe
         viewer.scene.camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(0, 0, 20000000)
+            destination: Cesium.Cartesian3.fromDegrees(0, 0, 20000000) // Adjust this value to get a suitable zoom level
         });
 
         var flights = [];
-        var airportData = {};
-
-        fetch('GlobalAirportDatabase.txt')
-            .then(response => response.text())
-            .then(text => {
-                var lines = text.split('\n');
-                for (var line of lines) {
-                    var parts = line.split(':');
-                    var icao = parts[1];
-                    var name = parts[3];
-                    var city = parts[4];
-                    var lat = parseFloat(parts[14]);
-                    var lng = parseFloat(parts[15]);
-                    airportData[icao] = { name: name, city: city, lat: lat, lng: lng };
-                }
-            });
 
         document.getElementById('addFlightBtn').addEventListener('click', function() {
             var flightNumber = document.getElementById('flightNumber').value;
@@ -108,21 +94,41 @@
         });
 
         function fetchFlightData(flightNumber) {
+            // Replace 'your_aviationstack_api_key' with your actual AviationStack API key
             var apiKey = 'b4afbf290419fff9262b0e7f192c59be';
             var apiUrl = `http://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${flightNumber}`;
 
             fetch(apiUrl)
                 .then(response => response.json())
                 .then(data => {
+                    console.log('API Response:', data); // Log the response for debugging
                     if (data.data && data.data.length > 0) {
                         var flightData = data.data[0];
-                        var originICAO = flightData.departure.icao;
-                        var destinationICAO = flightData.arrival.icao;
+                        var origin = {
+                            lat: flightData.departure.latitude,
+                            lng: flightData.departure.longitude
+                        };
+                        var destination = {
+                            lat: flightData.arrival.latitude,
+                            lng: flightData.arrival.longitude
+                        };
 
-                        var origin = airportData[originICAO];
-                        var destination = airportData[destinationICAO];
+                        if (flightData.live) {
+                            var flight = {
+                                number: flightNumber,
+                                origin: origin,
+                                destination: destination,
+                                live: {
+                                    latitude: flightData.live.latitude,
+                                    longitude: flightData.live.longitude,
+                                    altitude: flightData.live.altitude
+                                }
+                            };
 
-                        if (origin && destination) {
+                            flights.push(flight);
+                            addFlightToTable(flight);
+                            visualizeFlight(flight);
+                        } else {
                             var flight = {
                                 number: flightNumber,
                                 origin: origin,
@@ -131,9 +137,8 @@
 
                             flights.push(flight);
                             addFlightToTable(flight);
+                            alert('Live flight coordinates not available. Displaying departure and arrival points.');
                             visualizeStaticFlight(flight);
-                        } else {
-                            alert('Flight data not found.');
                         }
                     } else {
                         alert('Flight not found.');
@@ -162,6 +167,24 @@
             row.appendChild(destinationCell);
 
             tbody.appendChild(row);
+        }
+
+        function visualizeFlight(flight) {
+            var livePoint = Cesium.Cartesian3.fromDegrees(flight.live.longitude, flight.live.latitude, flight.live.altitude * 0.3048); // Convert feet to meters
+
+            viewer.entities.add({
+                name: flight.number,
+                position: livePoint,
+                point: {
+                    pixelSize: 10,
+                    color: Cesium.Color.RED
+                },
+                label: {
+                    text: 'Live: ' + flight.number,
+                    font: '14pt sans-serif',
+                    verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+                }
+            });
         }
 
         function visualizeStaticFlight(flight) {
