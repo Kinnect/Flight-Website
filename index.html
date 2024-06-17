@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Animation</title>
+<style>
+    body {
+        background-color: skyblue;
+    }
+
+    img {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        transition: left 3s;
+    }
+</style>
+</head>
+<body>
+<img src="LogoTest.png" alt="Moving Image" id="movingImage">
+
+<script>
+    window.onload = function() {
+        var img = document.getElementById('movingImage');
+        var screenWidth = window.innerWidth;
+        var imgWidth = img.clientWidth;
+
+        img.style.left = (screenWidth - imgWidth) + 'px';
+
+        img.addEventListener('transitionend', function() {
+            img.style.display = 'none';
+            setTimeout(function() {
+                window.location.href = "website.html";
+            }, 1000); // Redirect after 1 second (1000 milliseconds)
+        });
+    };
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive World Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+    body, html {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    #map {
+        height: 80vh;
+        background-color: transparent; /* Set the background to transparent */
+    }
+
+    #countriesList {
+        margin-top: 20px;
+    }
+
+    .popup-content {
+        text-align: center;
+    }
+
+    .delete-btn {
+        cursor: pointer;
+        color: red;
+        margin-left: 10px;
+    }
+
+    #countryCounter {
+        margin-top: 10px;
+    }
+</style>
+</head>
+<body>
+<h1>Map</h1>
+<div>
+    <h2>Countries List</h2>
+    <select id="countriesDropdown">
+        <option value="">Select a country to delete</option>
+    </select>
+    <span id="countryCounter"></span>
+</div>
+<div>
+    <input type="text" id="countryInput" list="countrySuggestions" placeholder="Enter a country name">
+    <datalist id="countrySuggestions">
+        <!-- Suggestions will be dynamically populated -->
+    </datalist>
+    <button id="addCountryBtn">Add Country</button>
+</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    var map = L.map('map').setView([20, 0], 2); // Center the map at (latitude: 20, longitude: 0) with zoom level 2
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+    }).addTo(map);
+
+    var highlightedLayer = null;
+    var countriesList = JSON.parse(localStorage.getItem('countriesList')) || ["Mexico", "Canada", "Brazil"]; // Retrieve countriesList from localStorage or use default list
+
+    // Load GeoJSON data for country boundaries
+    fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
+    .then(response => response.json())
+    .then(data => {
+        L.geoJSON(data, {
+            style: function(feature) {
+                return {
+                    color: '#3388ff',
+                    weight: 1,
+                    fillOpacity: 0.5
+                };
+            },
+            onEachFeature: function(feature, layer) {
+                if (countriesList.includes(feature.properties.name)) {
+                    layer.setStyle({fillColor: 'green'});
+                    var countryName = feature.properties.name;
+                    var option = document.createElement('option');
+                    option.value = countryName;
+                    option.textContent = countryName;
+                    document.getElementById('countriesDropdown').appendChild(option);
+                }
+
+                layer.on('click', function(e) {
+                    var countryName = feature.properties.name;
+                    if (highlightedLayer !== layer) {
+                        if (highlightedLayer) {
+                            highlightedLayer.setStyle({fillColor: 'green'});
+                        }
+                        layer.setStyle({fillColor: 'red'});
+                        layer.bindPopup('<div class="popup-content"><b>Country:</b> ' + countryName + '</div>').openPopup();
+                        highlightedLayer = layer;
+                    }
+                });
+            }
+        }).addTo(map);
+    });
+
+    var airportsList = []; // Array to store airport data
+
+    // Load airport data from OpenFlights
+    fetch('https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat')
+    .then(response => response.text())
+    .then(data => {
+        // Split the data into lines and process each line
+        data.split('\n').forEach(line => {
+            var parts = line.split(',');
+            if (parts.length >= 7) {
+                var airportName = parts[1];
+                var latitude = parseFloat(parts[6]);
+                var longitude = parseFloat(parts[7]);
+                if (!isNaN(latitude) && !isNaN(longitude)) {
+                    airportsList.push({name: airportName, latlng: [latitude, longitude]});
+                }
+            }
+        });
+
+        // Plot airport points on the map
+        /*
+        airportsList.forEach(airport => {
+            L.marker(airport.latlng).addTo(map).bindPopup('<b>Airport:</b> ' + airport.name);
+        });
+        */
+
+        updateAirportCounter(); // Update the airport counter
+    });
+
+    function updateAirportCounter() {
+        document.getElementById('airportCounter').textContent = "Number of Airports: " + airportsList.length;
+    }
+
+    // Populate the datalist with country suggestions
+    var countrySuggestions = document.getElementById('countrySuggestions');
+    fetch('https://restcountries.com/v3.1/all')
+    .then(response => response.json())
+    .then(data => {
+        data.forEach(country => {
+            var countryName = country.name.common;
+            var option = document.createElement('option');
+            option.value = countryName;
+            countrySuggestions.appendChild(option);
+        });
+    });
+
+    // Event listener to update country counter
+    updateCountryCounter();
+
+    // Event listener for adding a country
+    document.getElementById('addCountryBtn').addEventListener('click', function() {
+        var countryName = document.getElementById('countryInput').value;
+        if (countryName) {
+            countriesList.push(countryName);
+            countriesList.sort(); // Sort the countries alphabetically
+            var option = document.createElement('option');
+            option.value = countryName;
+            option.textContent = countryName;
+            document.getElementById('countriesDropdown').appendChild(option);
+            document.getElementById('countryInput').value = '';
+            alert(countryName + " has been added to the list.");
+            // Refresh the map
+            map.eachLayer(function(layer) {
+                if (layer.feature) {
+                    if (countriesList.includes(layer.feature.properties.name)) {
+                        layer.setStyle({fillColor: 'green'});
+                    }
+                }
+            });
+            localStorage.setItem('countriesList', JSON.stringify(countriesList));
+            updateCountryCounter();
+        }
+    });
+
+    // Event listener for removing a country
+    document.getElementById('countriesDropdown').addEventListener('change', function() {
+        var selectedCountry = this.value;
+        if (selectedCountry) {
+            var optionIndex = countriesList.indexOf(selectedCountry);
+            if (optionIndex !== -1) {
+                countriesList.splice(optionIndex, 1);
+                alert(selectedCountry + " has been removed from the list.");
+                // Refresh the map
+                map.eachLayer(function(layer) {
+                    if (layer.feature) {
+                        if (layer.feature.properties.name === selectedCountry) {
+                            layer.setStyle({fillColor: '#3388ff'});
+                        }
+                    }
+                });
+                localStorage.setItem('countriesList', JSON.stringify(countriesList));
+                refreshCountriesDropdown();
+                updateCountryCounter();
+            }
+        }
+    });
+
+    function refreshCountriesDropdown() {
+        var countriesDropdown = document.getElementById('countriesDropdown');
+        // Clear existing options
+        countriesDropdown.innerHTML = '<option value="">Select a country to delete</option>';
+        // Populate dropdown with updated list of countries
+        countriesList.forEach(function(country) {
+            var option = document.createElement('option');
+            option.value = country;
+            option.textContent = country;
+            countriesDropdown.appendChild(option);
+        });
+    }
+
+    function updateCountryCounter() {
+        document.getElementById('countryCounter').textContent = "Number of Countries: " + countriesList.length;
+    }
+</script>
+</body>
+</html>
