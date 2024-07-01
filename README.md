@@ -1,2 +1,2 @@
 Flight Journey
-Proof of concept for a historical flight tracker with edit capabilities. 
+Proof of concept for a flight tracker with history capabilities. 
